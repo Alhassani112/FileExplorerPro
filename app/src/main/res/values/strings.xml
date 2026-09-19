@@ -1,0 +1,27 @@
+<resources>
+    <string name="app_name">File Explorer Pro</string>
+    <string name="files_tab">Files</string>
+    <string name="usb_tab">USB</string>
+    <string name="search">Search</string>
+    <string name="hidden_files">Hidden Files</string>
+    <string name="sort">Sort</string>
+    <string name="new_folder">New Folder</string>
+    <string name="rename">Rename</string>
+    <string name="delete">Delete</string>
+    <string name="copy">Copy</string>
+    <string name="cut">Cut</string>
+    <string name="paste">Paste</string>
+    <string name="cancel">Cancel</string>
+    <string name="info">Info</string>
+    <string name="confirm_delete">Confirm Delete</string>
+    <string name="storage_used">Used: %s</string>
+    <string name="storage_free">Free: %s</string>
+    <string name="storage_total">Total: %s</string>
+    <string name="no_usb">No USB devices</string>
+    <string name="connect_usb">Connect USB OTG device</string>
+    <string name="speed_playback">Playback Speed</string>
+    <string name="audio_tracks">Audio Tracks</string>
+    <string name="no_subtitle">No subtitles available</string>
+    <string name="brightness">Brightness: %d%%</string>
+    <string name="volume">Volume: %d%%</string>
+</resources>

@@ -1,0 +1,6 @@
+-keep class androidx.media3.** { *; }
+-dontwarn androidx.media3.**
+-keep class com.github.mjdev.libaums.** { *; }
+-dontwarn com.github.mjdev.libaums.**
+-keep class com.example.fileexplorerpro.player.** { *; }
+-keepattributes *Annotation*

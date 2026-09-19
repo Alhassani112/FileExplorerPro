@@ -1,0 +1,27 @@
+<resources>
+    <string name="app_name">مستكشف الملفات برو</string>
+    <string name="files_tab">الملفات</string>
+    <string name="usb_tab">USB</string>
+    <string name="search">بحث</string>
+    <string name="hidden_files">الملفات المخفية</string>
+    <string name="sort">ترتيب</string>
+    <string name="new_folder">مجلد جديد</string>
+    <string name="rename">إعادة تسمية</string>
+    <string name="delete">حذف</string>
+    <string name="copy">نسخ</string>
+    <string name="cut">قص</string>
+    <string name="paste">لصق</string>
+    <string name="cancel">إلغاء</string>
+    <string name="info">معلومات</string>
+    <string name="confirm_delete">تأكيد الحذف</string>
+    <string name="storage_used">مستخدم: %s</string>
+    <string name="storage_free">مجاني: %s</string>
+    <string name="storage_total">الإجمالي: %s</string>
+    <string name="no_usb">لا توجد أجهزة USB</string>
+    <string name="connect_usb">اتصل بجهاز USB OTG</string>
+    <string name="speed_playback">سرعة التشغيل</string>
+    <string name="audio_tracks">المسارات الصوتية</string>
+    <string name="no_subtitle">لا توجد ترجمات متاحة</string>
+    <string name="brightness">السطوع: %d%%</string>
+    <string name="volume">الصوت: %d%%</string>
+</resources>
