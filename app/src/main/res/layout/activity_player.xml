@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/black">
+
+    <androidx.media3.ui.PlayerView
+        android:id="@+id/player_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:animation_enabled="true"
+        app:auto_show="true"
+        app:controller_layout_id="@layout/player_control_view"
+        app:hide_on_touch="true"
+        app:keep_content_on_player_reset="true"
+        app:resize_mode="fit"
+        app:show_buffering="when_playing"
+        app:show_timeout="3500"
+        app:surface_type="surface_view"
+        app:use_controller="true" />
+
+    <LinearLayout
+        android:id="@+id/gesture_hint"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:background="@drawable/player_hint_bg"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:paddingStart="22dp"
+        android:paddingTop="14dp"
+        android:paddingEnd="22dp"
+        android:paddingBottom="14dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/gesture_hint_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@android:color/white"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/player_error"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:padding="16dp"
+        android:textColor="@android:color/white"
+        android:visibility="gone" />
+</FrameLayout>
