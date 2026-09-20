@@ -130,10 +130,12 @@ fun FileBrowserScreen(vm: FileViewModel, onOpenMedia: (FileItem) -> Unit) {
                         Text("المجلد فارغ", fontSize = 16.sp)
                     }
                 } else {
-                    val click: (FileItem) -> Unit = { it ->
-                        when {
-                            it.isDirectory -> vm.openPath(it.uri.path ?: return@let)
-                            it.isPlayable || it.isImage -> onOpenMedia(it)
+                    val click: (FileItem) -> Unit = { item ->
+                        if (item.isDirectory) {
+                            val p = item.uri.path
+                            if (p != null) vm.openPath(p)
+                        } else if (item.isPlayable || item.isImage) {
+                            onOpenMedia(item)
                         }
                     }
                     if (s.viewMode == ViewMode.GRID) {

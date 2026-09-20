@@ -108,8 +108,12 @@ class FileRepository(private val ctx: Context) {
     suspend fun moveRecursive(s: FileItem, destUri: Uri): Boolean =
         copyRecursive(s, destUri).also { if (it) delete(s.uri) }
 
-    /** تحويل URI إلى File إذا كان محلياً (file://) */
-    fun uriToFile(uri: Uri): File? = try {
-        if (uri.scheme == "file") File(uri.path ?: return null) else null
-    } catch (_: Exception) { null }
+    fun uriToFile(uri: Uri): File? {
+        return try {
+            if (uri.scheme == "file") {
+                val p = uri.path
+                if (p != null) File(p) else null
+            } else null
+        } catch (_: Exception) { null }
+    }
 }
