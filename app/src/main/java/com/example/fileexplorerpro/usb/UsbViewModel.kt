@@ -17,62 +17,96 @@ data class UsbState(
     val loading: Boolean = false,
     val error: String? = null,
     val connected: Boolean = false,
-    val currentDevice: String? = null
+    val currentDevice: String? = null,
+    val needsPermission: Boolean = false,
+    val pendingDevice: UsbMassStorageDevice? = null
 )
 
 class UsbViewModel(app: Application) : AndroidViewModel(app) {
 
+    private val manager = UsbStorageManager(app)
     private val _s = MutableStateFlow(UsbState())
     val state: StateFlow<UsbState> = _s.asStateFlow()
-    private var root: UsbFile? = null
 
     fun refresh() {
         _s.value = _s.value.copy(
-            devices = try {
-                UsbMassStorageDevice.getMassStorageDevices(getApplication()).toList()
-            } catch (_: Exception) { emptyList() }
+            devices = manager.listDevices(),
+            error = null
         )
     }
 
-    fun connect(d: UsbMassStorageDevice) {
+    fun connect(device: UsbMassStorageDevice) {
         viewModelScope.launch {
-            _s.value = _s.value.copy(loading = true, error = null)
-            try {
-                d.init()
-                val partitions = d.partitions
-                if (partitions.isEmpty()) {
-                    _s.value = _s.value.copy(
-                        loading = false,
-                        error = "لا توجد أقسام على الجهاز"
-                    )
-                    return@launch
-                }
-                val partition = partitions[0]
-                // محاولة متعددة للحصول على المجلد الجذر
-                val fs = try { partition.fileSystem } catch (_: Exception) { null }
-                root = fs?.rootDirectory
-                val list = try { root?.listFiles()?.toList() ?: emptyList() }
-                           catch (_: Exception) { emptyList() }
-                _s.value = _s.value.copy(
-                    connected = true,
-                    path = listOfNotNull(root),
-                    files = list,
-                    loading = false,
-                    currentDevice = d.usbDevice.deviceName
-                )
-            } catch (e: Exception) {
+            _s.value = _s.value.copy(loading = true, error = null, needsPermission = false)
+
+            // 1. تحقق من الصلاحية
+            if (!manager.hasPermission(device)) {
                 _s.value = _s.value.copy(
                     loading = false,
-                    error = "خطأ: ${e.message ?: "غير معروف"}"
+                    needsPermission = true,
+                    pendingDevice = device
                 )
+                return@launch
             }
+
+            // 2. افتح الجهاز
+            doOpen(device)
         }
     }
 
-    fun openDir(d: UsbFile) {
+    /** يُستدعى من الواجهة عندما يوافق المستخدم على حوار الصلاحية */
+    fun requestPermissionAndConnect(device: UsbMassStorageDevice) {
+        viewModelScope.launch {
+            _s.value = _s.value.copy(loading = true, error = null)
+            val granted = manager.requestPermission(device)
+            if (!granted) {
+                _s.value = _s.value.copy(
+                    loading = false,
+                    error = "تم رفض صلاحية USB",
+                    needsPermission = false,
+                    pendingDevice = null
+                )
+                return@launch
+            }
+            doOpen(device)
+        }
+    }
+
+    fun dismissPermissionDialog() {
+        _s.value = _s.value.copy(needsPermission = false, pendingDevice = null)
+    }
+
+    private suspend fun doOpen(device: UsbMassStorageDevice) {
+        val result = manager.open(device)
+        result.fold(
+            onSuccess = { root ->
+                _s.value = _s.value.copy(
+                    connected = true,
+                    path = listOf(root),
+                    files = manager.listChildren(root),
+                    loading = false,
+                    error = null,
+                    currentDevice = device.usbDevice.productName
+                        ?: device.usbDevice.deviceName,
+                    needsPermission = false,
+                    pendingDevice = null
+                )
+            },
+            onFailure = { e ->
+                _s.value = _s.value.copy(
+                    loading = false,
+                    error = "فشل الاتصال: ${e.message ?: "غير معروف"}",
+                    needsPermission = false,
+                    pendingDevice = null
+                )
+            }
+        )
+    }
+
+    fun openDir(dir: UsbFile) {
         _s.value = _s.value.copy(
-            files = try { d.listFiles().toList() } catch (_: Exception) { emptyList() },
-            path = _s.value.path + d
+            files = manager.listChildren(dir),
+            path = _s.value.path + dir
         )
     }
 
@@ -82,7 +116,7 @@ class UsbViewModel(app: Application) : AndroidViewModel(app) {
         val parent = p[p.size - 2]
         _s.value = _s.value.copy(
             path = p.dropLast(1),
-            files = try { parent.listFiles().toList() } catch (_: Exception) { emptyList() }
+            files = manager.listChildren(parent)
         )
         return true
     }
@@ -92,9 +126,7 @@ class UsbViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 f.delete()
                 _s.value.path.lastOrNull()?.let { cur ->
-                    _s.value = _s.value.copy(
-                        files = try { cur.listFiles().toList() } catch (_: Exception) { emptyList() }
-                    )
+                    _s.value = _s.value.copy(files = manager.listChildren(cur))
                 }
             } catch (e: Exception) {
                 _s.value = _s.value.copy(error = "فشل الحذف: ${e.message}")
@@ -103,7 +135,6 @@ class UsbViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun disconnect() {
-        root = null
         _s.value = UsbState(devices = _s.value.devices)
     }
 }
