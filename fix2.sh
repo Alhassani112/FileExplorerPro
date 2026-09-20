@@ -1,3 +1,8 @@
+#!/bin/bash
+D="app/src/main/java/com/example/fileexplorerpro"
+
+# استبدال PlayerActivity.kt بالإصدار الصحيح
+cat > $D/player/PlayerActivity.kt <<'EOF'
 package com.example.fileexplorerpro.player
 
 import android.annotation.SuppressLint
@@ -403,3 +408,30 @@ private fun fmt(ms: Long): String {
     val s = ms / 1000; val h = s / 3600; val m = (s % 3600) / 60; val sec = s % 60
     return if (h > 0) "%d:%02d:%02d".format(h, m, sec) else "%02d:%02d".format(m, sec)
 }
+EOF
+
+# إضافة الامتدادات الناقصة إلى FileItem.kt (إن لم تكن موجودة)
+if ! grep -q "isSubtitle" $D/data/FileItem.kt 2>/dev/null; then
+    cat > $D/data/FileItem.kt <<'EOF'
+package com.example.fileexplorerpro.data
+import android.net.Uri
+data class FileItem(
+    val uri: Uri, val name: String, val isDirectory: Boolean,
+    val size: Long, val lastModified: Long, val mimeType: String?,
+    val isHidden: Boolean = name.startsWith("."),
+    val posterUri: Uri? = null
+) {
+    val extension: String get() = name.substringAfterLast('.', "").lowercase()
+    val isVideo: Boolean get() = extension in setOf("mp4","mkv","avi","mov","webm","flv","3gp","m4v","ts")
+    val isAudio: Boolean get() = extension in setOf("mp3","m4a","aac","flac","ogg","wav","opus")
+    val isImage: Boolean get() = extension in setOf("jpg","jpeg","png","gif","webp","bmp","heic")
+    val isPlayable: Boolean get() = isVideo || isAudio
+    val isSubtitle: Boolean get() = extension in setOf("srt","ass","ssa","vtt","sub")
+    val isDocument: Boolean get() = extension in setOf("pdf","doc","docx","txt","xls","xlsx","ppt","pptx")
+    val isArchive: Boolean get() = extension in setOf("zip","rar","7z","tar","gz","bz2")
+}
+EOF
+    echo "  → تم تحديث FileItem.kt"
+fi
+
+echo "✅ تم إصلاح PlayerActivity.kt"
