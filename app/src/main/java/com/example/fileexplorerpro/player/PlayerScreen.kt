@@ -90,6 +90,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
 import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -102,7 +103,6 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
 import com.google.common.util.concurrent.ListenableFuture
-import com.google.common.util.concurrent.MoreExecutors
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -154,6 +154,7 @@ fun PlayerScreen(
     var scrubPos by remember { mutableLongStateOf(0L) }
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
     var tapJob by remember { mutableStateOf<Job?>(null) }
+    var pendingResume by remember { mutableLongStateOf(0L) }
 
     fun bumpControls() {
         showControls = true
@@ -168,23 +169,27 @@ fun PlayerScreen(
             try {
                 val c = future.get()
                 c.setMediaItem(SidecarSubtitles.mediaItem(uri))
+                pendingResume = resume.get(uri)
                 c.prepare()
-                val saved = resume.get(uri)
-                if (saved > 5_000L) c.seekTo(saved)
                 c.playWhenReady = true
                 controller = c
             } catch (e: Exception) {
                 error = e.message ?: "تعذر فتح المشغّل"
             }
-        }, MoreExecutors.directExecutor())
+        }, ContextCompat.getMainExecutor(ctx))
         onDispose {
-            try {
-                val c = if (future.isDone) future.get() else null
-                c?.let { resume.save(uri, it.currentPosition) }
-                c?.release()
-            } catch (_: Exception) {
+            val current = controller
+            if (current != null) {
+                resume.save(uri, current.currentPosition, current.duration)
+                current.release()
+            } else if (future.isDone) {
+                try {
+                    future.get().release()
+                } catch (_: Exception) {
+                }
+            } else {
+                MediaController.releaseFuture(future)
             }
-            MediaController.releaseFuture(future)
             controller = null
         }
     }
@@ -198,7 +203,15 @@ fun PlayerScreen(
             }
             override fun onPlaybackStateChanged(state: Int) {
                 buffering = state == Player.STATE_BUFFERING
-                if (state == Player.STATE_ENDED) playing = false
+                if (state == Player.STATE_READY && pendingResume > 5_000L) {
+                    val d = exo.duration
+                    if (d <= 0 || pendingResume < d - 8_000L) exo.seekTo(pendingResume)
+                    pendingResume = 0L
+                }
+                if (state == Player.STATE_ENDED) {
+                    playing = false
+                    resume.save(uri, 0L, exo.duration)
+                }
             }
             override fun onPlayerError(e: PlaybackException) {
                 error = e.localizedMessage ?: "خطأ في التشغيل"

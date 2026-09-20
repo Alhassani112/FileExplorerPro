@@ -5,6 +5,7 @@ import android.content.Intent
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
@@ -33,7 +34,8 @@ class MediaPlaybackService : MediaSessionService() {
         val sessionActivity = PendingIntent.getActivity(
             this,
             0,
-            Intent(this, PlayerActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            Intent(this, PlayerActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
         mediaSession = MediaSession.Builder(this, player)
@@ -54,7 +56,11 @@ class MediaPlaybackService : MediaSessionService() {
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         val player = mediaSession?.player
-        if (player == null || !player.playWhenReady || player.mediaItemCount == 0) {
+        if (player == null ||
+            player.playbackState == Player.STATE_IDLE ||
+            player.playbackState == Player.STATE_ENDED ||
+            !player.playWhenReady
+        ) {
             stopSelf()
         }
     }

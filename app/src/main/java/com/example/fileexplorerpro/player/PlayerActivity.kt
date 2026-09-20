@@ -1,6 +1,7 @@
 package com.example.fileexplorerpro.player
 
 import android.app.PictureInPictureParams
+import android.content.Intent
 import android.content.res.Configuration
 import android.net.Uri
 import android.os.Build
@@ -9,7 +10,6 @@ import android.util.Rational
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,17 +23,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import androidx.media3.common.util.UnstableApi
 import dagger.hilt.android.AndroidEntryPoint
 
-@OptIn(UnstableApi::class)
 @AndroidEntryPoint
 class PlayerActivity : ComponentActivity() {
     private var inPip by mutableStateOf(false)
-    private var mediaUri: Uri? = null
+    private var mediaUri by mutableStateOf<Uri?>(null)
 
-    override fun onCreate(s: Bundle?) {
-        super.onCreate(s)
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         hideSystemBars()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -42,19 +40,18 @@ class PlayerActivity : ComponentActivity() {
             finish()
             return
         }
-        render()
+        setPlayerContent()
     }
 
-    override fun onNewIntent(intent: android.content.Intent) {
+    override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        mediaUri = intent.data ?: return
-        render()
+        intent.data?.let { mediaUri = it }
     }
 
-    private fun render() {
-        val uri = mediaUri ?: return
+    private fun setPlayerContent() {
         setContent {
+            val uri = mediaUri ?: return@setContent
             MaterialTheme(colorScheme = darkColorScheme()) {
                 Box(Modifier.fillMaxSize().background(Color.Black)) {
                     PlayerScreen(
@@ -106,5 +103,10 @@ class PlayerActivity : ComponentActivity() {
     ) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         inPip = isInPictureInPictureMode
+    }
+
+    override fun onDestroy() {
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        super.onDestroy()
     }
 }
