@@ -1,3 +1,5 @@
+-keep class dagger.hilt.** { *; }
+-keep class javax.inject.** { *; }
 -keep class com.github.mjdev.libaums.** { *; }
 -dontwarn com.github.mjdev.libaums.**
 -keep class androidx.media3.exoplayer.** { *; }

@@ -40,7 +40,9 @@ import com.example.fileexplorerpro.player.PlayerActivity
 import com.example.fileexplorerpro.ui.*
 import com.example.fileexplorerpro.ui.theme.FileExplorerTheme
 import com.example.fileexplorerpro.viewer.ImageViewerActivity
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     private val vm: FileViewModel by viewModels()
 

@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
 import androidx.work.CoroutineWorker
+import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
@@ -11,6 +12,7 @@ import androidx.work.workDataOf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.UUID
 
 class FileOperationWorker(ctx: Context, p: WorkerParameters) : CoroutineWorker(ctx, p) {
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
@@ -51,18 +53,24 @@ class FileOperationWorker(ctx: Context, p: WorkerParameters) : CoroutineWorker(c
     }
 
     companion object {
-        fun enqueue(ctx: Context, op: String, uris: List<Uri>, dest: Uri) {
-            WorkManager.getInstance(ctx).enqueue(
-                OneTimeWorkRequestBuilder<FileOperationWorker>()
-                    .setInputData(
-                        workDataOf(
-                            "op" to op,
-                            "uris" to uris.map { it.toString() }.toTypedArray(),
-                            "dest" to dest.toString()
-                        )
+        const val UNIQUE_NAME = "file_ops"
+
+        fun enqueue(ctx: Context, op: String, uris: List<Uri>, dest: Uri): UUID {
+            val request = OneTimeWorkRequestBuilder<FileOperationWorker>()
+                .setInputData(
+                    workDataOf(
+                        "op" to op,
+                        "uris" to uris.map { it.toString() }.toTypedArray(),
+                        "dest" to dest.toString()
                     )
-                    .build()
+                )
+                .build()
+            WorkManager.getInstance(ctx).enqueueUniqueWork(
+                UNIQUE_NAME,
+                ExistingWorkPolicy.APPEND_OR_REPLACE,
+                request
             )
+            return request.id
         }
     }
 }

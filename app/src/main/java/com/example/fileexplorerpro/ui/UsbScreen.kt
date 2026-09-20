@@ -19,14 +19,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.fileexplorerpro.usb.UsbViewModel
 import com.github.mjdev.libaums.UsbMassStorageDevice
 import com.github.mjdev.libaums.fs.UsbFile
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun UsbScreen(vm: UsbViewModel = viewModel()) {
+fun UsbScreen(vm: UsbViewModel = hiltViewModel()) {
     val s by vm.state.collectAsStateWithLifecycle()
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var deleteTarget by remember { mutableStateOf<UsbFile?>(null) }

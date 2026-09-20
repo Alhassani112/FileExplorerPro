@@ -395,7 +395,7 @@ private fun ToolButton(
             Modifier.fillMaxWidth().padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Icon(icon, null, tint = color, modifier = Modifier.size(28.dp))
+            Icon(icon, label, tint = color, modifier = Modifier.size(28.dp))
             Spacer(Modifier.height(6.dp))
             Text(label, fontSize = 13.sp, fontWeight = FontWeight.Medium)
         }

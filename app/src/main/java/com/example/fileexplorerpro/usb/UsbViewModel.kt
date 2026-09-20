@@ -5,12 +5,14 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.github.mjdev.libaums.UsbMassStorageDevice
 import com.github.mjdev.libaums.fs.UsbFile
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import javax.inject.Inject
 
 data class UsbState(
     val devices: List<UsbMassStorageDevice> = emptyList(),
@@ -24,9 +26,11 @@ data class UsbState(
     val pendingDevice: UsbMassStorageDevice? = null
 )
 
-class UsbViewModel(app: Application) : AndroidViewModel(app) {
-
-    private val manager = UsbStorageManager(app)
+@HiltViewModel
+class UsbViewModel @Inject constructor(
+    app: Application,
+    private val manager: UsbStorageManager
+) : AndroidViewModel(app) {
     private val _s = MutableStateFlow(UsbState())
     val state: StateFlow<UsbState> = _s.asStateFlow()
 

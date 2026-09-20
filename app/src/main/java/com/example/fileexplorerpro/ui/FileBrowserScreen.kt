@@ -139,6 +139,9 @@ fun FileBrowserScreen(vm: FileViewModel, onOpenMedia: (FileItem) -> Unit) {
         snackbarHost = { SnackbarHost(snack) }
     ) { pad ->
         Box(Modifier.padding(pad).fillMaxSize()) {
+            if (s.transferRunning) {
+                LinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopCenter))
+            }
             if (s.loading) {
                 CircularProgressIndicator(Modifier.align(Alignment.Center))
             } else {

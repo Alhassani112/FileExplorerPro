@@ -65,9 +65,11 @@ import androidx.media3.session.SessionToken
 import androidx.media3.ui.PlayerView
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.delay
 
 @OptIn(UnstableApi::class)
+@AndroidEntryPoint
 class PlayerActivity : ComponentActivity() {
     override fun onCreate(s: Bundle?) {
         super.onCreate(s)

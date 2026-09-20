@@ -4,20 +4,25 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import com.example.fileexplorerpro.data.ClipOperation
 import com.example.fileexplorerpro.data.ClipboardManager
 import com.example.fileexplorerpro.data.FileItem
 import com.example.fileexplorerpro.data.FileNames
 import com.example.fileexplorerpro.data.FileOperationWorker
 import com.example.fileexplorerpro.data.FileRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import javax.inject.Inject
 
 enum class SortMode { NAME, DATE, SIZE, TYPE }
 enum class ViewMode { LIST, GRID }
@@ -33,11 +38,15 @@ data class BrowserState(
     val searchQuery: String = "",
     val backStack: List<Pair<Uri?, String?>> = emptyList(),
     val clipboardCount: Int = 0,
-    val message: String? = null
+    val message: String? = null,
+    val transferRunning: Boolean = false
 )
 
-class FileViewModel(app: Application) : AndroidViewModel(app) {
-    private val repo = FileRepository(app)
+@HiltViewModel
+class FileViewModel @Inject constructor(
+    app: Application,
+    private val repo: FileRepository
+) : AndroidViewModel(app) {
     private val _s = MutableStateFlow(BrowserState())
     val state: StateFlow<BrowserState> = _s.asStateFlow()
     private var listJob: Job? = null
@@ -63,7 +72,7 @@ class FileViewModel(app: Application) : AndroidViewModel(app) {
             }
             _s.update { st ->
                 st.copy(
-                    items = sort(list, st.sortMode),
+                    items = FileSorter.sort(list, st.sortMode),
                     loading = false,
                     currentUri = null,
                     currentPath = path,
@@ -83,7 +92,7 @@ class FileViewModel(app: Application) : AndroidViewModel(app) {
             val list = repo.listDirectory(uri, _s.value.showHidden)
             _s.update { st ->
                 st.copy(
-                    items = sort(list, st.sortMode),
+                    items = FileSorter.sort(list, st.sortMode),
                     loading = false,
                     backStack = if (prevUri != null && prevUri != uri)
                         st.backStack + (prevUri to prevPath) else st.backStack
@@ -116,7 +125,7 @@ class FileViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setSort(m: SortMode) {
-        _s.update { it.copy(sortMode = m, items = sort(it.items, m)) }
+        _s.update { it.copy(sortMode = m, items = FileSorter.sort(it.items, m)) }
     }
 
     fun setSearch(q: String) {
@@ -179,7 +188,7 @@ class FileViewModel(app: Application) : AndroidViewModel(app) {
     fun pasteHere() {
         val dest = repo.currentParentUri(_s.value.currentPath, _s.value.currentUri) ?: return
         val clip = ClipboardManager.get() ?: return
-        FileOperationWorker.enqueue(
+        val id = FileOperationWorker.enqueue(
             getApplication(),
             if (clip.operation == ClipOperation.COPY) "copy" else "move",
             clip.items.map { it.uri },
@@ -189,25 +198,27 @@ class FileViewModel(app: Application) : AndroidViewModel(app) {
         _s.update {
             it.copy(
                 clipboardCount = if (clip.operation == ClipOperation.CUT) 0 else it.clipboardCount,
-                message = "بدأت عملية النقل/النسخ"
+                message = "بدأت عملية النقل/النسخ",
+                transferRunning = true
             )
         }
-        refresh()
+        viewModelScope.launch {
+            val info = WorkManager.getInstance(getApplication())
+                .getWorkInfoByIdFlow(id)
+                .first { it != null && it.state.isFinished }
+            val ok = info?.state == WorkInfo.State.SUCCEEDED
+            _s.update {
+                it.copy(
+                    transferRunning = false,
+                    message = if (ok) "اكتملت العملية" else "فشلت عملية النسخ/النقل"
+                )
+            }
+            if (ok) refresh()
+        }
     }
 
     fun cancelClipboard() {
         ClipboardManager.clear()
         _s.update { it.copy(clipboardCount = 0) }
-    }
-
-    private fun sort(l: List<FileItem>, m: SortMode): List<FileItem> {
-        val (d, f) = l.partition { it.isDirectory }
-        val c = when (m) {
-            SortMode.NAME -> compareBy<FileItem> { it.name.lowercase() }
-            SortMode.DATE -> compareByDescending<FileItem> { it.lastModified }
-            SortMode.SIZE -> compareByDescending<FileItem> { it.size }
-            SortMode.TYPE -> compareBy<FileItem> { it.extension }
-        }
-        return d.sortedWith(c) + f.sortedWith(c)
     }
 }
