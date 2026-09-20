@@ -21,13 +21,19 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.CachePolicy
 import coil.request.ImageRequest
+import com.example.fileexplorerpro.R
 import com.example.fileexplorerpro.data.FileItem
+import com.example.fileexplorerpro.data.PosterResolver
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,39 +77,50 @@ fun FileBrowserScreen(vm: FileViewModel, onOpenMedia: (FileItem) -> Unit) {
                 navigationIcon = {
                     if (search) {
                         IconButton({ search = false; vm.setSearch("") }) {
-                            Icon(Icons.Default.Close, null)
+                            Icon(Icons.Default.Close, stringResource(R.string.cd_close))
                         }
                     } else if (s.backStack.isNotEmpty()) {
                         IconButton({ vm.goBack() }) {
-                            Icon(Icons.Default.ArrowBack, null)
+                            Icon(Icons.Default.ArrowBack, stringResource(R.string.cd_back))
                         }
                     }
                 },
                 actions = {
-                    IconButton({ search = true }) { Icon(Icons.Default.Search, null) }
+                    IconButton({ search = true }) {
+                        Icon(Icons.Default.Search, stringResource(R.string.search))
+                    }
                     IconButton(vm::toggleHidden) {
                         Icon(
                             if (s.showHidden) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                            null
+                            stringResource(R.string.hidden_files)
                         )
                     }
                     if (s.clipboardCount > 0) {
                         IconButton(vm::pasteHere) {
-                            Icon(Icons.Default.ContentPaste, "لصق")
+                            Icon(Icons.Default.ContentPaste, stringResource(R.string.paste))
                         }
                     }
                     IconButton(vm::toggleViewMode) {
                         Icon(
                             if (s.viewMode == ViewMode.GRID) Icons.Default.ViewList
-                            else Icons.Default.GridView, "طريقة العرض"
+                            else Icons.Default.GridView,
+                            stringResource(R.string.cd_view_mode)
                         )
                     }
                     var open by remember { mutableStateOf(false) }
-                    IconButton({ open = true }) { Icon(Icons.Default.Sort, null) }
+                    IconButton({ open = true }) {
+                        Icon(Icons.Default.Sort, stringResource(R.string.sort))
+                    }
                     DropdownMenu(open, { open = false }) {
                         SortMode.entries.forEach { m ->
+                            val label = when (m) {
+                                SortMode.NAME -> stringResource(R.string.sort_name)
+                                SortMode.DATE -> stringResource(R.string.sort_date)
+                                SortMode.SIZE -> stringResource(R.string.sort_size)
+                                SortMode.TYPE -> stringResource(R.string.sort_type)
+                            }
                             DropdownMenuItem(
-                                text = { Text(m.name) },
+                                text = { Text(label) },
                                 onClick = { vm.setSort(m); open = false }
                             )
                         }
@@ -142,7 +159,11 @@ fun FileBrowserScreen(vm: FileViewModel, onOpenMedia: (FileItem) -> Unit) {
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(Modifier.height(12.dp))
-                        Text("المجلد فارغ", fontSize = 16.sp)
+                        Text(
+                            if (s.searchQuery.isBlank()) stringResource(R.string.folder_empty)
+                            else stringResource(R.string.no_search_results),
+                            fontSize = 16.sp
+                        )
                     }
                 } else {
                     val click: (FileItem) -> Unit = { item ->
@@ -211,6 +232,17 @@ fun GridItem(
     onCut: () -> Unit
 ) {
     var m by remember { mutableStateOf(false) }
+    val ctx = LocalContext.current
+    var poster by remember(item.uri) { mutableStateOf(item.posterUri) }
+    LaunchedEffect(item.uri, item.isDirectory) {
+        if (item.isDirectory && poster == null) {
+            poster = withContext(Dispatchers.IO) {
+                if (item.uri.scheme == "file") {
+                    item.uri.path?.let { PosterResolver.findPosterByPath(File(it)) }
+                } else PosterResolver.findPoster(ctx, item.uri)
+            }
+        }
+    }
     Column(
         Modifier
             .clip(RoundedCornerShape(10.dp))
@@ -227,11 +259,10 @@ fun GridItem(
                 .background(Color.Black.copy(alpha = 0.1f)),
             contentAlignment = Alignment.Center
         ) {
-            if (item.posterUri != null) {
-                val ctx = LocalContext.current
+            if (poster != null) {
                 AsyncImage(
                     model = ImageRequest.Builder(ctx)
-                        .data(item.posterUri)
+                        .data(poster)
                         .size(360, 540)
                         .crossfade(true)
                         .memoryCachePolicy(CachePolicy.ENABLED)

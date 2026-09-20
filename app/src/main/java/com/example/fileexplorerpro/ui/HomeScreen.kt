@@ -7,9 +7,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -75,7 +72,7 @@ fun HomeScreen(
                 },
                 actions = {
                     IconButton(onClick = onPickFolder) {
-                        Icon(Icons.Rounded.FolderOpen, null)
+                        Icon(Icons.Rounded.FolderOpen, "اختيار مجلد")
                     }
                 }
             )
@@ -239,18 +236,22 @@ private fun MainStorageCard(vol: StorageVolume, onClick: () -> Unit) {
 /* ═══════════ شبكة الوصول السريع ═══════════ */
 @Composable
 private fun QuickAccessGrid(items: List<StorageVolume>, onClick: (StorageVolume) -> Unit) {
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(3),
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(max = 380.dp)
-            .padding(horizontal = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        userScrollEnabled = false
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        items(items) { vol ->
-            QuickCard(vol) { onClick(vol) }
+        items.chunked(3).forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                row.forEach { vol ->
+                    Box(Modifier.weight(1f)) {
+                        QuickCard(vol) { onClick(vol) }
+                    }
+                }
+                repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+            }
         }
     }
 }
@@ -280,7 +281,7 @@ private fun QuickCard(vol: StorageVolume, onClick: () -> Unit) {
                     .background(color.copy(alpha = 0.2f)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(icon, null, tint = color, modifier = Modifier.size(26.dp))
+                Icon(icon, vol.name, tint = color, modifier = Modifier.size(26.dp))
             }
             Spacer(Modifier.height(8.dp))
             Text(

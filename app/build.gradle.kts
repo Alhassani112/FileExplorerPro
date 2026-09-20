@@ -7,16 +7,39 @@ android {
     namespace = "com.example.fileexplorerpro"
     compileSdk = 34
     defaultConfig {
-        applicationId = "com.example.fileexplorerpro"
-        minSdk = 24; targetSdk = 34
-        versionCode = 2; versionName = "1.1"
+        applicationId = "com.alhassani.fileexplorerpro"
+        minSdk = 24
+        targetSdk = 34
+        versionCode = 3
+        versionName = "1.2"
+    }
+    buildTypes {
+        debug {
+            isMinifyEnabled = false
+            applicationIdSuffix = ".debug"
+        }
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
+    lint {
+        abortOnError = false
+        checkReleaseBuilds = false
+    }
 }
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")

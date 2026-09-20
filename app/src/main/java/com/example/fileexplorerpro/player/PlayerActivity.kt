@@ -209,7 +209,7 @@ fun PlayerScreen(uri: Uri, onExit: () -> Unit, onPip: () -> Unit) {
                     Modifier.fillMaxWidth().padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onExit) { Icon(Icons.Default.Close, null, tint = Color.White) }
+                    IconButton(onExit) { Icon(Icons.Default.Close, "إغلاق", tint = Color.White) }
                     Text(
                         uri.lastPathSegment ?: "وسائط",
                         color = Color.White,
@@ -234,7 +234,7 @@ fun PlayerScreen(uri: Uri, onExit: () -> Unit, onPip: () -> Unit) {
                         }
                     }
                     IconButton(onPip) {
-                        Icon(Icons.Default.PictureInPicture, null, tint = Color.White)
+                        Icon(Icons.Default.PictureInPicture, "نافذة ضمن نافذة", tint = Color.White)
                     }
                 }
 

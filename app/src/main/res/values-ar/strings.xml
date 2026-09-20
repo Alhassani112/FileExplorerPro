@@ -2,6 +2,7 @@
     <string name="app_name">مستكشف الملفات برو</string>
     <string name="files_tab">الملفات</string>
     <string name="usb_tab">USB</string>
+    <string name="home_tab">الرئيسية</string>
     <string name="search">بحث</string>
     <string name="hidden_files">الملفات المخفية</string>
     <string name="sort">ترتيب</string>
@@ -13,15 +14,15 @@
     <string name="paste">لصق</string>
     <string name="cancel">إلغاء</string>
     <string name="info">معلومات</string>
+    <string name="share">مشاركة</string>
     <string name="confirm_delete">تأكيد الحذف</string>
-    <string name="storage_used">مستخدم: %s</string>
-    <string name="storage_free">مجاني: %s</string>
-    <string name="storage_total">الإجمالي: %s</string>
-    <string name="no_usb">لا توجد أجهزة USB</string>
-    <string name="connect_usb">اتصل بجهاز USB OTG</string>
-    <string name="speed_playback">سرعة التشغيل</string>
-    <string name="audio_tracks">المسارات الصوتية</string>
-    <string name="no_subtitle">لا توجد ترجمات متاحة</string>
-    <string name="brightness">السطوع: %d%%</string>
-    <string name="volume">الصوت: %d%%</string>
+    <string name="sort_name">الاسم</string>
+    <string name="sort_date">التاريخ</string>
+    <string name="sort_size">الحجم</string>
+    <string name="sort_type">النوع</string>
+    <string name="cd_back">رجوع</string>
+    <string name="cd_close">إغلاق</string>
+    <string name="cd_view_mode">طريقة العرض</string>
+    <string name="folder_empty">المجلد فارغ</string>
+    <string name="no_search_results">لا نتائج</string>
 </resources>

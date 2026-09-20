@@ -60,9 +60,8 @@ class UsbStorageManager(private val context: Context) {
                 return@suspendCancellableCoroutine
             }
             val flags = PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-            val pi = PendingIntent.getBroadcast(
-                context, 0, Intent(ACTION_USB_PERMISSION), flags
-            )
+            val intent = Intent(ACTION_USB_PERMISSION).setPackage(context.packageName)
+            val pi = PendingIntent.getBroadcast(context, 0, intent, flags)
             usbManager.requestPermission(device.usbDevice, pi)
             cont.invokeOnCancellation {
                 try { context.unregisterReceiver(receiver) } catch (_: Exception) {}
