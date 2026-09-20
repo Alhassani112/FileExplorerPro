@@ -334,7 +334,7 @@ fun PlayerScreen(uri: Uri?, onExit: () -> Unit, onCreatePip: () -> Unit) {
                                     group.mediaTrackGroup, listOf(c.trackIndex))
                                 exo.trackSelectionParameters =
                                     exo.trackSelectionParameters.buildUpon()
-                                        .setOverride(override).build()
+                                        .addOverride(override).build()
                             }
                             showTrackMenu = false
                         }) { Text(c.label) }
@@ -383,7 +383,7 @@ fun PlayerScreen(uri: Uri?, onExit: () -> Unit, onCreatePip: () -> Unit) {
                                     group.mediaTrackGroup, listOf(c.trackIndex))
                                 exo.trackSelectionParameters =
                                     exo.trackSelectionParameters.buildUpon()
-                                        .setOverride(override).build()
+                                        .addOverride(override).build()
                             }
                             subEnabled = true
                             showSubtitleMenu = false
