@@ -12,8 +12,8 @@ android {
         applicationId = "com.alhassani.fileexplorerpro"
         minSdk = 24
         targetSdk = 34
-        versionCode = 5
-        versionName = "1.4"
+        versionCode = 6
+        versionName = "1.5"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildTypes {
