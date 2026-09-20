@@ -20,21 +20,30 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import coil.request.CachePolicy
+import coil.request.ImageRequest
 import com.example.fileexplorerpro.data.FileItem
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FileBrowserScreen(vm: FileViewModel, onOpenMedia: (FileItem) -> Unit) {
     val s by vm.state.collectAsStateWithLifecycle()
+    val snack = remember { SnackbarHostState() }
     var search by remember { mutableStateOf(false) }
     var rename by remember { mutableStateOf<FileItem?>(null) }
     var info by remember { mutableStateOf<FileItem?>(null) }
     var newFolder by remember { mutableStateOf(false) }
     var delTarget by remember { mutableStateOf<List<FileItem>>(emptyList()) }
+    LaunchedEffect(s.message) {
+        val msg = s.message ?: return@LaunchedEffect
+        snack.showSnackbar(msg)
+        vm.consumeMessage()
+    }
 
     val title = s.currentPath?.substringAfterLast('/')?.takeIf { it.isNotBlank() }
         ?: s.currentUri?.lastPathSegment
@@ -78,10 +87,15 @@ fun FileBrowserScreen(vm: FileViewModel, onOpenMedia: (FileItem) -> Unit) {
                             null
                         )
                     }
+                    if (s.clipboardCount > 0) {
+                        IconButton(vm::pasteHere) {
+                            Icon(Icons.Default.ContentPaste, "لصق")
+                        }
+                    }
                     IconButton(vm::toggleViewMode) {
                         Icon(
                             if (s.viewMode == ViewMode.GRID) Icons.Default.ViewList
-                            else Icons.Default.GridView, null
+                            else Icons.Default.GridView, "طريقة العرض"
                         )
                     }
                     var open by remember { mutableStateOf(false) }
@@ -102,9 +116,10 @@ fun FileBrowserScreen(vm: FileViewModel, onOpenMedia: (FileItem) -> Unit) {
         },
         floatingActionButton = {
             FloatingActionButton({ newFolder = true }) {
-                Icon(Icons.Default.CreateNewFolder, null)
+                Icon(Icons.Default.CreateNewFolder, "مجلد جديد")
             }
-        }
+        },
+        snackbarHost = { SnackbarHost(snack) }
     ) { pad ->
         Box(Modifier.padding(pad).fillMaxSize()) {
             if (s.loading) {
@@ -132,8 +147,7 @@ fun FileBrowserScreen(vm: FileViewModel, onOpenMedia: (FileItem) -> Unit) {
                 } else {
                     val click: (FileItem) -> Unit = { item ->
                         if (item.isDirectory) {
-                            val p = item.uri.path
-                            if (p != null) vm.openPath(p)
+                            vm.openItem(item)
                         } else if (item.isPlayable || item.isImage) {
                             onOpenMedia(item)
                         }
@@ -146,15 +160,21 @@ fun FileBrowserScreen(vm: FileViewModel, onOpenMedia: (FileItem) -> Unit) {
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             items(filtered, key = { it.uri.toString() }) { i ->
-                                GridItem(i, { click(i) },
-                                    { rename = i }, { info = i }, { delTarget = listOf(i) })
+                                GridItem(
+                                    i, { click(i) },
+                                    { rename = i }, { info = i }, { delTarget = listOf(i) },
+                                    { vm.copySelected(listOf(i)) }, { vm.cutSelected(listOf(i)) }
+                                )
                             }
                         }
                     } else {
                         LazyColumn {
                             items(filtered, key = { it.uri.toString() }) { i ->
-                                ListRow(i, { click(i) },
-                                    { rename = i }, { info = i }, { delTarget = listOf(i) })
+                                ListRow(
+                                    i, { click(i) },
+                                    { rename = i }, { info = i }, { delTarget = listOf(i) },
+                                    { vm.copySelected(listOf(i)) }, { vm.cutSelected(listOf(i)) }
+                                )
                             }
                         }
                     }
@@ -186,7 +206,9 @@ fun GridItem(
     onClick: () -> Unit,
     onRename: () -> Unit,
     onInfo: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onCopy: () -> Unit,
+    onCut: () -> Unit
 ) {
     var m by remember { mutableStateOf(false) }
     Column(
@@ -206,8 +228,15 @@ fun GridItem(
             contentAlignment = Alignment.Center
         ) {
             if (item.posterUri != null) {
+                val ctx = LocalContext.current
                 AsyncImage(
-                    item.posterUri, item.name,
+                    model = ImageRequest.Builder(ctx)
+                        .data(item.posterUri)
+                        .size(360, 540)
+                        .crossfade(true)
+                        .memoryCachePolicy(CachePolicy.ENABLED)
+                        .build(),
+                    contentDescription = item.name,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -221,7 +250,7 @@ fun GridItem(
         }
         Spacer(Modifier.height(6.dp))
         Text(item.name, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        ItemMenu(m, { m = false }, onRename, onInfo, onDelete)
+        ItemMenu(m, { m = false }, onRename, onInfo, onDelete, onCopy, onCut)
     }
 }
 
@@ -232,7 +261,9 @@ fun ListRow(
     onClick: () -> Unit,
     onRename: () -> Unit,
     onInfo: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onCopy: () -> Unit,
+    onCut: () -> Unit
 ) {
     var m by remember { mutableStateOf(false) }
     Column {
@@ -262,7 +293,7 @@ fun ListRow(
                 )
             }
         )
-        ItemMenu(m, { m = false }, onRename, onInfo, onDelete)
+        ItemMenu(m, { m = false }, onRename, onInfo, onDelete, onCopy, onCut)
         HorizontalDivider()
     }
 }
@@ -273,9 +304,21 @@ fun ItemMenu(
     onDismiss: () -> Unit,
     onRename: () -> Unit,
     onInfo: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onCopy: () -> Unit,
+    onCut: () -> Unit
 ) {
     DropdownMenu(expanded, onDismissRequest = onDismiss) {
+        DropdownMenuItem(
+            text = { Text("نسخ") },
+            leadingIcon = { Icon(Icons.Default.ContentCopy, null) },
+            onClick = { onDismiss(); onCopy() }
+        )
+        DropdownMenuItem(
+            text = { Text("قص") },
+            leadingIcon = { Icon(Icons.Default.ContentCut, null) },
+            onClick = { onDismiss(); onCut() }
+        )
         DropdownMenuItem(
             text = { Text("إعادة تسمية") },
             leadingIcon = { Icon(Icons.Default.Edit, null) },

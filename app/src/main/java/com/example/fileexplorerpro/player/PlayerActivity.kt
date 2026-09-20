@@ -1,6 +1,7 @@
 package com.example.fileexplorerpro.player
 
 import android.app.PictureInPictureParams
+import android.content.ComponentName
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -8,13 +9,42 @@ import android.util.Rational
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Forward10
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PictureInPicture
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Replay10
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -29,14 +59,16 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
-import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
 import androidx.media3.ui.PlayerView
+import com.google.common.util.concurrent.ListenableFuture
+import com.google.common.util.concurrent.MoreExecutors
 import kotlinx.coroutines.delay
 
-@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+@OptIn(UnstableApi::class)
 class PlayerActivity : ComponentActivity() {
-    private var player: ExoPlayer? = null
-
     override fun onCreate(s: Bundle?) {
         super.onCreate(s)
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -47,7 +79,10 @@ class PlayerActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         val uri = intent?.data
-        if (uri == null) { finish(); return }
+        if (uri == null) {
+            finish()
+            return
+        }
 
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
@@ -62,92 +97,114 @@ class PlayerActivity : ComponentActivity() {
                                         .setAspectRatio(Rational(16, 9)).build()
                                 )
                             }
-                        },
-                        onReady = { player = it }
+                        }
                     )
                 }
             }
         }
     }
 
-    override fun onDestroy() {
-        player?.release()
-        player = null
-        super.onDestroy()
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.S
+        ) {
+            enterPictureInPictureMode(
+                PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build()
+            )
+        }
     }
 }
 
-@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+@OptIn(UnstableApi::class)
 @Composable
-fun PlayerScreen(
-    uri: Uri,
-    onExit: () -> Unit,
-    onPip: () -> Unit,
-    onReady: (ExoPlayer) -> Unit
-) {
+fun PlayerScreen(uri: Uri, onExit: () -> Unit, onPip: () -> Unit) {
     val ctx = LocalContext.current
+    var controller by remember { mutableStateOf<MediaController?>(null) }
     var showControls by remember { mutableStateOf(true) }
     var pos by remember { mutableLongStateOf(0L) }
     var dur by remember { mutableLongStateOf(0L) }
     var playing by remember { mutableStateOf(true) }
     var speed by remember { mutableFloatStateOf(1f) }
 
-    val exo = remember {
-        ExoPlayer.Builder(ctx).build().apply {
-            setMediaItem(MediaItem.fromUri(uri))
-            prepare()
-            playWhenReady = true
+    DisposableEffect(uri) {
+        val token = SessionToken(ctx, ComponentName(ctx, MediaPlaybackService::class.java))
+        val future: ListenableFuture<MediaController> =
+            MediaController.Builder(ctx, token).buildAsync()
+        future.addListener({
+            try {
+                val c = future.get()
+                c.setMediaItem(MediaItem.fromUri(uri))
+                c.prepare()
+                c.playWhenReady = true
+                controller = c
+            } catch (_: Exception) {
+            }
+        }, MoreExecutors.directExecutor())
+        onDispose {
+            future.addListener({
+                try {
+                    future.get().release()
+                } catch (_: Exception) {
+                }
+            }, MoreExecutors.directExecutor())
+            MediaController.releaseFuture(future)
+            controller = null
         }
     }
 
-    LaunchedEffect(Unit) { onReady(exo) }
-
-    DisposableEffect(Unit) {
+    val exo = controller
+    DisposableEffect(exo) {
+        if (exo == null) return@DisposableEffect onDispose { }
         val l = object : Player.Listener {
-            override fun onIsPlayingChanged(p: Boolean) { playing = p }
+            override fun onIsPlayingChanged(p: Boolean) {
+                playing = p
+            }
         }
         exo.addListener(l)
-        onDispose {
-            exo.removeListener(l)
-            exo.release()
-        }
+        onDispose { exo.removeListener(l) }
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(exo) {
+        val p = exo ?: return@LaunchedEffect
         while (true) {
-            pos = exo.currentPosition
-            dur = exo.duration.coerceAtLeast(0)
-            delay(500)
+            pos = p.currentPosition
+            dur = p.duration.coerceAtLeast(0)
+            delay(if (p.isPlaying) 500 else 1000)
         }
     }
 
     LaunchedEffect(showControls) {
-        if (showControls) { delay(4000); showControls = false }
+        if (showControls) {
+            delay(4000)
+            showControls = false
+        }
     }
 
     Box(
-        Modifier.fillMaxSize()
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onTap = { showControls = !showControls },
-                    onDoubleTap = { if (exo.isPlaying) exo.pause() else exo.play() }
-                )
-            }
+        Modifier.fillMaxSize().pointerInput(Unit) {
+            detectTapGestures(
+                onTap = { showControls = !showControls },
+                onDoubleTap = {
+                    val p = controller ?: return@detectTapGestures
+                    if (p.isPlaying) p.pause() else p.play()
+                }
+            )
+        }
     ) {
         AndroidView(
             factory = { c ->
                 PlayerView(c).apply {
-                    player = exo
                     useController = false
                     keepScreenOn = true
                 }
             },
+            update = { it.player = controller },
             modifier = Modifier.fillMaxSize()
         )
 
         if (showControls) {
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f))) {
-                // الشريط العلوي
                 Row(
                     Modifier.fillMaxWidth().padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -168,7 +225,11 @@ fun PlayerScreen(
                         listOf(0.5f, 1f, 1.5f, 2f).forEach { s ->
                             DropdownMenuItem(
                                 text = { Text("${s}x") },
-                                onClick = { speed = s; exo.setPlaybackSpeed(s); sm = false }
+                                onClick = {
+                                    speed = s
+                                    controller?.setPlaybackSpeed(s)
+                                    sm = false
+                                }
                             )
                         }
                     }
@@ -177,35 +238,37 @@ fun PlayerScreen(
                     }
                 }
 
-                // أزرار التحكم الوسطى
                 Row(
                     Modifier.align(Alignment.Center),
                     horizontalArrangement = Arrangement.spacedBy(24.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton({ exo.seekTo((exo.currentPosition - 10000).coerceAtLeast(0)) }) {
-                        Icon(Icons.Default.Replay10, null, tint = Color.White,
-                            modifier = Modifier.size(44.dp))
+                    IconButton({
+                        controller?.let {
+                            it.seekTo((it.currentPosition - 10000).coerceAtLeast(0))
+                        }
+                    }) {
+                        Icon(Icons.Default.Replay10, null, tint = Color.White, modifier = Modifier.size(44.dp))
                     }
-                    IconButton({ if (exo.isPlaying) exo.pause() else exo.play() }) {
+                    IconButton({
+                        controller?.let { if (it.isPlaying) it.pause() else it.play() }
+                    }) {
                         Icon(
                             if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
                             null, tint = Color.White, modifier = Modifier.size(64.dp)
                         )
                     }
-                    IconButton({ exo.seekTo((exo.currentPosition + 10000).coerceAtMost(dur)) }) {
-                        Icon(Icons.Default.Forward10, null, tint = Color.White,
-                            modifier = Modifier.size(44.dp))
+                    IconButton({
+                        controller?.seekTo((controller!!.currentPosition + 10000).coerceAtMost(dur))
+                    }) {
+                        Icon(Icons.Default.Forward10, null, tint = Color.White, modifier = Modifier.size(44.dp))
                     }
                 }
 
-                // الشريط السفلي
-                Column(
-                    Modifier.align(Alignment.BottomCenter).padding(16.dp)
-                ) {
+                Column(Modifier.align(Alignment.BottomCenter).padding(16.dp)) {
                     Slider(
                         value = if (dur > 0) pos.toFloat() / dur else 0f,
-                        onValueChange = { exo.seekTo((it * dur).toLong()) },
+                        onValueChange = { controller?.seekTo((it * dur).toLong()) },
                         colors = SliderDefaults.colors(
                             thumbColor = Color.White,
                             activeTrackColor = Color(0xFF2196F3)

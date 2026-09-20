@@ -64,6 +64,9 @@ class UsbStorageManager(private val context: Context) {
                 context, 0, Intent(ACTION_USB_PERMISSION), flags
             )
             usbManager.requestPermission(device.usbDevice, pi)
+            cont.invokeOnCancellation {
+                try { context.unregisterReceiver(receiver) } catch (_: Exception) {}
+            }
         }
 
     /** فتح الجهاز بعد الحصول على الصلاحية */

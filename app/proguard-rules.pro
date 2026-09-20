@@ -1,6 +1,6 @@
--keep class androidx.media3.** { *; }
--dontwarn androidx.media3.**
 -keep class com.github.mjdev.libaums.** { *; }
 -dontwarn com.github.mjdev.libaums.**
--keep class com.example.fileexplorerpro.player.** { *; }
--keepattributes *Annotation*
+-keep class androidx.media3.exoplayer.** { *; }
+-keepclassmembers class * extends androidx.media3.session.MediaSessionService { *; }
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile

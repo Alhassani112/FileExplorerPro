@@ -5,10 +5,12 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.github.mjdev.libaums.UsbMassStorageDevice
 import com.github.mjdev.libaums.fs.UsbFile
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class UsbState(
     val devices: List<UsbMassStorageDevice> = emptyList(),
@@ -104,29 +106,30 @@ class UsbViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun openDir(dir: UsbFile) {
-        _s.value = _s.value.copy(
-            files = manager.listChildren(dir),
-            path = _s.value.path + dir
-        )
+        viewModelScope.launch {
+            val children = withContext(Dispatchers.IO) { manager.listChildren(dir) }
+            _s.value = _s.value.copy(files = children, path = _s.value.path + dir)
+        }
     }
 
     fun goUp(): Boolean {
         val p = _s.value.path
         if (p.size <= 1) return false
         val parent = p[p.size - 2]
-        _s.value = _s.value.copy(
-            path = p.dropLast(1),
-            files = manager.listChildren(parent)
-        )
+        viewModelScope.launch {
+            val children = withContext(Dispatchers.IO) { manager.listChildren(parent) }
+            _s.value = _s.value.copy(path = p.dropLast(1), files = children)
+        }
         return true
     }
 
     fun delete(f: UsbFile) {
         viewModelScope.launch {
             try {
-                f.delete()
+                withContext(Dispatchers.IO) { f.delete() }
                 _s.value.path.lastOrNull()?.let { cur ->
-                    _s.value = _s.value.copy(files = manager.listChildren(cur))
+                    val children = withContext(Dispatchers.IO) { manager.listChildren(cur) }
+                    _s.value = _s.value.copy(files = children)
                 }
             } catch (e: Exception) {
                 _s.value = _s.value.copy(error = "فشل الحذف: ${e.message}")

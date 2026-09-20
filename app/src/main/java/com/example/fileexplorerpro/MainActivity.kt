@@ -92,24 +92,30 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // إذا لا توجد صلاحيات كافية → اعرض شاشة طلب
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !hasAllFiles) {
-                    PermissionScreen(
-                        onRequest = { openAllFilesSettings() },
-                        onRefresh = { hasAllFiles = hasAllFilesAccess() }
-                    )
-                } else if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R && !hasLegacyPerms) {
+                val canBrowseLegacy = Build.VERSION.SDK_INT < Build.VERSION_CODES.R && hasLegacyPerms
+                val canBrowseAll = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && hasAllFiles
+                var useSafOnly by remember { mutableStateOf(false) }
+                if (!canBrowseLegacy && !canBrowseAll && !useSafOnly) {
                     PermissionScreen(
                         onRequest = {
-                            permLauncher.launch(arrayOf(
-                                Manifest.permission.READ_EXTERNAL_STORAGE,
-                                Manifest.permission.WRITE_EXTERNAL_STORAGE
-                            ))
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                openAllFilesSettings()
+                            } else {
+                                permLauncher.launch(
+                                    arrayOf(
+                                        Manifest.permission.READ_EXTERNAL_STORAGE,
+                                        Manifest.permission.WRITE_EXTERNAL_STORAGE
+                                    )
+                                )
+                            }
                         },
-                        onRefresh = { hasLegacyPerms = hasStoragePermission() }
+                        onRefresh = {
+                            hasLegacyPerms = hasStoragePermission()
+                            hasAllFiles = hasAllFilesAccess()
+                        },
+                        onSafOnly = { useSafOnly = true }
                     )
                 } else {
-                    // ✅ الصلاحيات متوفرة → اعرض التطبيق
                     AppNavHost(vm, openTree, ctx)
                 }
             }
@@ -142,7 +148,11 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun PermissionScreen(onRequest: () -> Unit, onRefresh: () -> Unit) {
+private fun PermissionScreen(
+    onRequest: () -> Unit,
+    onRefresh: () -> Unit,
+    onSafOnly: () -> Unit
+) {
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
             Modifier.fillMaxSize().padding(24.dp),
@@ -188,7 +198,11 @@ private fun PermissionScreen(onRequest: () -> Unit, onRefresh: () -> Unit) {
                 modifier = Modifier.fillMaxWidth().height(48.dp),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("تحقّق بعد المنح", fontSize = 16.sp)
+                Text("تحقّقتُ من الإذن", fontSize = 16.sp)
+            }
+            Spacer(Modifier.height(8.dp))
+            TextButton(onClick = onSafOnly) {
+                Text("متابعة باختيار مجلد (SAF)")
             }
         }
     }

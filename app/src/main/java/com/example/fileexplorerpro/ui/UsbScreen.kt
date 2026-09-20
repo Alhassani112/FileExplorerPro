@@ -175,7 +175,7 @@ fun UsbScreen(vm: UsbViewModel = viewModel()) {
                                     }
                                 }
                             }
-                            items(s.devices) { d ->
+                            items(s.devices, key = { it.usbDevice.deviceId }) { d ->
                                 DeviceCard(d) { vm.connect(d) }
                             }
                         }
@@ -183,7 +183,7 @@ fun UsbScreen(vm: UsbViewModel = viewModel()) {
                 }
                 else -> {
                     LazyColumn(contentPadding = PaddingValues(8.dp)) {
-                        items(s.files) { f ->
+                        items(s.files, key = { it.absolutePath }) { f ->
                             UsbFileRow(
                                 f,
                                 onClick = { if (f.isDirectory) vm.openDir(f) },

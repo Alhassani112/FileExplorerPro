@@ -4,14 +4,20 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.fileexplorerpro.data.*
+import com.example.fileexplorerpro.data.ClipOperation
+import com.example.fileexplorerpro.data.ClipboardManager
+import com.example.fileexplorerpro.data.FileItem
+import com.example.fileexplorerpro.data.FileNames
+import com.example.fileexplorerpro.data.FileOperationWorker
+import com.example.fileexplorerpro.data.FileRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
 
 enum class SortMode { NAME, DATE, SIZE, TYPE }
 enum class ViewMode { LIST, GRID }
@@ -25,78 +31,101 @@ data class BrowserState(
     val viewMode: ViewMode = ViewMode.GRID,
     val sortMode: SortMode = SortMode.NAME,
     val searchQuery: String = "",
-    val backStack: List<Pair<Uri?, String?>> = emptyList()
+    val backStack: List<Pair<Uri?, String?>> = emptyList(),
+    val clipboardCount: Int = 0,
+    val message: String? = null
 )
 
 class FileViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = FileRepository(app)
     private val _s = MutableStateFlow(BrowserState())
     val state: StateFlow<BrowserState> = _s.asStateFlow()
+    private var listJob: Job? = null
 
-    /** فتح مجلد بالمسار المباشر (File API) */
+    fun openItem(item: FileItem) {
+        if (!item.isDirectory) return
+        if (item.uri.scheme == "file") {
+            val path = item.uri.path ?: return
+            openPath(path)
+        } else {
+            openUri(item.uri)
+        }
+    }
+
     fun openPath(path: String) {
-        viewModelScope.launch {
+        listJob?.cancel()
+        listJob = viewModelScope.launch {
             val prevUri = _s.value.currentUri
             val prevPath = _s.value.currentPath
-            _s.value = _s.value.copy(loading = true, currentPath = path)
-            val list = withContext(Dispatchers.IO) { listByPath(path, _s.value.showHidden) }
-            val sorted = sort(list, _s.value.sortMode)
-            _s.value = _s.value.copy(
-                items = sorted,
-                loading = false,
-                currentUri = null,
-                currentPath = path,
-                backStack = if (prevPath != null && prevPath != path)
-                    _s.value.backStack + (prevUri to prevPath) else _s.value.backStack
-            )
+            _s.update { it.copy(loading = true, currentPath = path) }
+            val list = withContext(Dispatchers.IO) {
+                repo.listByPath(path, _s.value.showHidden)
+            }
+            _s.update { st ->
+                st.copy(
+                    items = sort(list, st.sortMode),
+                    loading = false,
+                    currentUri = null,
+                    currentPath = path,
+                    backStack = if (prevPath != null && prevPath != path)
+                        st.backStack + (prevUri to prevPath) else st.backStack
+                )
+            }
         }
     }
 
-    /** فتح مجلد عبر SAF URI */
     fun openUri(uri: Uri) {
-        viewModelScope.launch {
+        listJob?.cancel()
+        listJob = viewModelScope.launch {
             val prevUri = _s.value.currentUri
             val prevPath = _s.value.currentPath
-            _s.value = _s.value.copy(loading = true, currentUri = uri, currentPath = null)
+            _s.update { it.copy(loading = true, currentUri = uri, currentPath = null) }
             val list = repo.listDirectory(uri, _s.value.showHidden)
-            val sorted = sort(list, _s.value.sortMode)
-            _s.value = _s.value.copy(
-                items = sorted,
-                loading = false,
-                backStack = if (prevUri != null && prevUri != uri)
-                    _s.value.backStack + (prevUri to prevPath) else _s.value.backStack
-            )
+            _s.update { st ->
+                st.copy(
+                    items = sort(list, st.sortMode),
+                    loading = false,
+                    backStack = if (prevUri != null && prevUri != uri)
+                        st.backStack + (prevUri to prevPath) else st.backStack
+                )
+            }
         }
     }
 
-    /** @deprecated استخدم openUri */
+    @Deprecated("استخدم openUri")
     fun openDirectory(uri: Uri, push: Boolean = true) = openUri(uri)
 
     fun goBack(): Boolean {
         val bs = _s.value.backStack
         if (bs.isEmpty()) return false
         val (prevUri, prevPath) = bs.last()
-        _s.value = _s.value.copy(backStack = bs.dropLast(1))
+        _s.update { it.copy(backStack = bs.dropLast(1)) }
         if (prevPath != null) openPath(prevPath) else prevUri?.let { openUri(it) }
         return true
     }
 
     fun toggleHidden() {
-        _s.value = _s.value.copy(showHidden = !_s.value.showHidden)
+        _s.update { it.copy(showHidden = !it.showHidden) }
         refresh()
     }
 
     fun toggleViewMode() {
-        _s.value = _s.value.copy(
-            viewMode = if (_s.value.viewMode == ViewMode.GRID) ViewMode.LIST else ViewMode.GRID
-        )
+        _s.update {
+            it.copy(viewMode = if (it.viewMode == ViewMode.GRID) ViewMode.LIST else ViewMode.GRID)
+        }
     }
 
     fun setSort(m: SortMode) {
-        _s.value = _s.value.copy(sortMode = m, items = sort(_s.value.items, m))
+        _s.update { it.copy(sortMode = m, items = sort(it.items, m)) }
     }
 
-    fun setSearch(q: String) { _s.value = _s.value.copy(searchQuery = q) }
+    fun setSearch(q: String) {
+        _s.update { it.copy(searchQuery = q) }
+    }
+
+    fun consumeMessage() {
+        _s.update { it.copy(message = null) }
+    }
 
     fun refresh() {
         _s.value.currentPath?.let { openPath(it) }
@@ -105,71 +134,79 @@ class FileViewModel(app: Application) : AndroidViewModel(app) {
 
     fun delete(item: FileItem) {
         viewModelScope.launch {
-            val ok = withContext(Dispatchers.IO) {
-                try { File(item.uri.path ?: return@withContext false).delete() }
-                catch (_: Exception) { false }
-            }
-            if (ok) _s.value = _s.value.copy(items = _s.value.items - item)
+            val ok = repo.delete(item.uri)
+            if (ok) _s.update { it.copy(items = it.items - item) }
+            else _s.update { it.copy(message = "تعذر حذف العنصر") }
         }
     }
 
     fun rename(item: FileItem, newName: String) {
         viewModelScope.launch {
-            val ok = withContext(Dispatchers.IO) {
-                try {
-                    val src = File(item.uri.path ?: return@withContext false)
-                    src.renameTo(File(src.parentFile, newName))
-                } catch (_: Exception) { false }
+            val safe = FileNames.sanitize(newName)
+            if (safe == null) {
+                _s.update { it.copy(message = "اسم غير صالح") }
+                return@launch
             }
-            if (ok) refresh()
+            val ok = repo.rename(item.uri, safe)
+            if (ok) refresh() else _s.update { it.copy(message = "تعذر إعادة التسمية") }
         }
     }
 
     fun createFolder(name: String) {
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                try {
-                    val base = _s.value.currentPath?.let { File(it) }
-                        ?: _s.value.currentUri?.let { repo.uriToFile(it) }
-                    base?.let { File(it, name).mkdirs() }
-                } catch (_: Exception) {}
+            val parent = repo.currentParentUri(_s.value.currentPath, _s.value.currentUri)
+            if (parent == null) {
+                _s.update { it.copy(message = "لا يوجد مجلد حالي") }
+                return@launch
             }
+            val uri = repo.createFolder(parent, name)
+            if (uri == null) _s.update { it.copy(message = "تعذر إنشاء المجلد") }
             refresh()
         }
     }
 
-    fun copySelected(items: List<FileItem>) { /* TODO */ }
-    fun cutSelected(items: List<FileItem>) { /* TODO */ }
-    fun pasteHere() { /* TODO */ }
-    fun cancelClipboard() { }
+    fun copySelected(items: List<FileItem>) = setClipboard(items, ClipOperation.COPY)
 
-    private fun listByPath(path: String, showHidden: Boolean): List<FileItem> {
-        val dir = File(path)
-        if (!dir.exists() || !dir.isDirectory) return emptyList()
-        val files = dir.listFiles() ?: return emptyList()
-        return files.asSequence()
-            .filter { showHidden || !it.name.startsWith(".") }
-            .map { f ->
-                FileItem(
-                    uri = Uri.fromFile(f),
-                    name = f.name,
-                    isDirectory = f.isDirectory,
-                    size = if (f.isDirectory) 0 else f.length(),
-                    lastModified = f.lastModified(),
-                    mimeType = null,
-                    posterUri = if (f.isDirectory) PosterResolver.findPosterByPath(f) else null
-                )
-            }
-            .toList()
+    fun cutSelected(items: List<FileItem>) = setClipboard(items, ClipOperation.CUT)
+
+    private fun setClipboard(items: List<FileItem>, op: ClipOperation) {
+        val src = repo.currentParentUri(_s.value.currentPath, _s.value.currentUri) ?: return
+        if (items.isEmpty()) return
+        ClipboardManager.set(items, op, src)
+        _s.update { it.copy(clipboardCount = items.size, message = "تم النسخ إلى الحافظة") }
+    }
+
+    fun pasteHere() {
+        val dest = repo.currentParentUri(_s.value.currentPath, _s.value.currentUri) ?: return
+        val clip = ClipboardManager.get() ?: return
+        FileOperationWorker.enqueue(
+            getApplication(),
+            if (clip.operation == ClipOperation.COPY) "copy" else "move",
+            clip.items.map { it.uri },
+            dest
+        )
+        if (clip.operation == ClipOperation.CUT) ClipboardManager.clear()
+        _s.update {
+            it.copy(
+                clipboardCount = if (clip.operation == ClipOperation.CUT) 0 else it.clipboardCount,
+                message = "بدأت عملية النقل/النسخ"
+            )
+        }
+        refresh()
+    }
+
+    fun cancelClipboard() {
+        ClipboardManager.clear()
+        _s.update { it.copy(clipboardCount = 0) }
     }
 
     private fun sort(l: List<FileItem>, m: SortMode): List<FileItem> {
         val (d, f) = l.partition { it.isDirectory }
         val c = when (m) {
             SortMode.NAME -> compareBy<FileItem> { it.name.lowercase() }
-            SortMode.DATE -> compareByDescending { it.lastModified }
-            SortMode.SIZE -> compareByDescending { it.size }
-            SortMode.TYPE -> compareBy { it.extension }
+            SortMode.DATE -> compareByDescending<FileItem> { it.lastModified }
+            SortMode.SIZE -> compareByDescending<FileItem> { it.size }
+            SortMode.TYPE -> compareBy<FileItem> { it.extension }
         }
         return d.sortedWith(c) + f.sortedWith(c)
     }
