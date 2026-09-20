@@ -2,6 +2,7 @@ package com.example.fileexplorerpro.ui
 
 import com.example.fileexplorerpro.data.FileItem
 
+/** ترتيب المجلدات أولاً ثم الملفات حسب [SortMode]. */
 object FileSorter {
     fun sort(items: List<FileItem>, mode: SortMode): List<FileItem> {
         val (dirs, files) = items.partition { it.isDirectory }

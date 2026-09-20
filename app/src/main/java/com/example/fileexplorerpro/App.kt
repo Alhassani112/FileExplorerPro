@@ -29,15 +29,24 @@ class App : Application() {
             )
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID, "مشغل الوسائط",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply { description = "تحكم في التشغيل" }
-            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+            val nm = getSystemService(NotificationManager::class.java)
+            nm.createNotificationChannel(
+                NotificationChannel(
+                    CHANNEL_ID, "مشغل الوسائط",
+                    NotificationManager.IMPORTANCE_LOW
+                ).apply { description = "تحكم في التشغيل" }
+            )
+            nm.createNotificationChannel(
+                NotificationChannel(
+                    FILE_OPS_CHANNEL, "عمليات الملفات",
+                    NotificationManager.IMPORTANCE_LOW
+                ).apply { description = "نسخ ونقل الملفات" }
+            )
         }
     }
 
     companion object {
         const val CHANNEL_ID = "media_playback"
+        const val FILE_OPS_CHANNEL = "file_ops"
     }
 }

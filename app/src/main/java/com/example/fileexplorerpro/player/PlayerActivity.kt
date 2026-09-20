@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PictureInPicture
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay10
+import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -57,8 +58,10 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
@@ -128,6 +131,8 @@ fun PlayerScreen(uri: Uri, onExit: () -> Unit, onPip: () -> Unit) {
     var dur by remember { mutableLongStateOf(0L) }
     var playing by remember { mutableStateOf(true) }
     var speed by remember { mutableFloatStateOf(1f) }
+    var audioMenu by remember { mutableStateOf(false) }
+    var audioTracks by remember { mutableStateOf<List<Pair<Int, String>>>(emptyList()) }
 
     DisposableEffect(uri) {
         val token = SessionToken(ctx, ComponentName(ctx, MediaPlaybackService::class.java))
@@ -233,6 +238,31 @@ fun PlayerScreen(uri: Uri, onExit: () -> Unit, onPip: () -> Unit) {
                                     sm = false
                                 }
                             )
+                        }
+                    }
+                    if (audioTracks.size > 1) {
+                        IconButton({ audioMenu = true }) {
+                            Icon(Icons.Default.Audiotrack, "مسار الصوت", tint = Color.White)
+                        }
+                        DropdownMenu(audioMenu, { audioMenu = false }) {
+                            audioTracks.forEach { (groupIndex, label) ->
+                                DropdownMenuItem(
+                                    text = { Text(label) },
+                                    onClick = {
+                                        val p = controller
+                                        val group = p?.currentTracks?.groups?.getOrNull(groupIndex)
+                                        if (p != null && group != null) {
+                                            p.trackSelectionParameters =
+                                                p.trackSelectionParameters.buildUpon()
+                                                    .setOverrideForType(
+                                                        TrackSelectionOverride(group.mediaTrackGroup, 0)
+                                                    )
+                                                    .build()
+                                        }
+                                        audioMenu = false
+                                    }
+                                )
+                            }
                         }
                     }
                     IconButton(onPip) {
