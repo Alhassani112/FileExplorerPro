@@ -3,8 +3,6 @@ name: Build and Release APK
 on:
   push:
     branches: [ main, master ]
-    tags:
-      - 'v*'
   workflow_dispatch:
 
 permissions:
@@ -47,6 +45,8 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: Release v1.0.${{ github.run_number }}
           files: app/build/outputs/apk/debug/app-debug.apk
           generate_release_notes: true
           draft: false
