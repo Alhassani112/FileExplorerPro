@@ -14,7 +14,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -39,7 +38,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.BrightnessHigh
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.Lock
@@ -55,6 +53,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -78,6 +77,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Fill
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
@@ -86,6 +86,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -109,8 +110,6 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 private val Gold = Color(0xFFFFC14A)
-private val Glass = Color(0x33000000)
-private val GlassStroke = Color(0x40FFFFFF)
 
 @OptIn(UnstableApi::class)
 @Composable
@@ -150,7 +149,7 @@ fun PlayerScreen(
         mutableFloatStateOf(audio.getStreamVolume(AudioManager.STREAM_MUSIC) / maxVol.toFloat())
     }
     var sideHint by remember { mutableStateOf<SideHint?>(null) }
-    var seekFlash by remember { mutableIntStateOf(0) } // -1 left 1 right 0 none
+    var seekFlash by remember { mutableIntStateOf(0) }
     var scrubbing by remember { mutableStateOf(false) }
     var scrubPos by remember { mutableLongStateOf(0L) }
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
@@ -290,11 +289,10 @@ fun PlayerScreen(
                             return@awaitEachGesture
                         }
                         val start = down.position
-                        val startTime = SystemClock.uptimeMillis()
                         var total = Offset.Zero
                         var dragging = false
                         var mode = 0
-                        val slop = viewConfiguration.touchSlop * 1.6f
+                        val slop = viewConfiguration.touchSlop * 1.8f
                         val w = size.width.toFloat().coerceAtLeast(1f)
                         val h = size.height.toFloat().coerceAtLeast(1f)
                         val p0 = latestController.value
@@ -307,19 +305,35 @@ fun PlayerScreen(
                             val ch = event.changes.firstOrNull { it.id == down.id } ?: break
                             if (!ch.pressed) {
                                 if (!dragging) {
-                                    val dt = SystemClock.uptimeMillis() - startTime
-                                    if (dt < 280) {
-                                        // second tap handled below via double-tap window in detect — use position thirds
+                                    val x = start.x
+                                    if (tapJob?.isActive == true) {
+                                        tapJob?.cancel()
+                                        tapJob = null
+                                        val third = w / 3f
+                                        when {
+                                            x < third -> latestSeekBy.value(-10_000)
+                                            x > third * 2 -> latestSeekBy.value(10_000)
+                                            else -> latestController.value?.let {
+                                                if (it.isPlaying) it.pause() else it.play()
+                                            }
+                                        }
+                                    } else {
+                                        tapJob = scope.launch {
+                                            delay(240)
+                                            showControls = !showControls
+                                            if (showControls) hideGen++
+                                            tapJob = null
+                                        }
                                     }
-                                } else if (mode == 3 && duration > 0) {
-                                    val next = (startPos + (total.x / w * duration * 0.55f).toLong())
-                                        .coerceIn(0, duration)
-                                    p0?.seekTo(next)
-                                    scrubbing = false
-                                    pos = next
                                 } else {
-                                    sideHint = null
+                                    if (mode == 3 && duration > 0) {
+                                        val next = (startPos + (total.x / w * duration * 0.55f).toLong())
+                                            .coerceIn(0, duration)
+                                        p0?.seekTo(next)
+                                        pos = next
+                                    }
                                     scrubbing = false
+                                    sideHint = null
                                 }
                                 break
                             }
@@ -327,7 +341,9 @@ fun PlayerScreen(
                             total += Offset(delta.x, delta.y)
                             if (!dragging && total.getDistance() > slop) {
                                 dragging = true
-                                mode = if (abs(total.x) > abs(total.y)) 3
+                                tapJob?.cancel()
+                                tapJob = null
+                                mode = if (abs(total.x) > abs(total.y) * 1.1f) 3
                                 else if (start.x < w * 0.45f) 1 else 2
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             }
@@ -355,7 +371,7 @@ fun PlayerScreen(
                                         scrubPos = next
                                         pos = next
                                         val now = SystemClock.uptimeMillis()
-                                        if (now - lastSeekAt > 90) {
+                                        if (now - lastSeekAt > 100) {
                                             p0?.seekTo(next)
                                             lastSeekAt = now
                                         }
@@ -364,44 +380,6 @@ fun PlayerScreen(
                                 }
                             }
                         }
-                    }
-                }.pointerInput(locked) {
-                    if (locked) return@pointerInput
-                    awaitEachGesture {
-                        val down = awaitFirstDown()
-                        val t0 = SystemClock.uptimeMillis()
-                        val p0 = down.position
-                        // wait up without much move
-                        var moved = false
-                        while (true) {
-                            val e = awaitPointerEvent()
-                            val ch = e.changes.firstOrNull { it.id == down.id } ?: return@awaitEachGesture
-                            if ((ch.position - p0).getDistance() > viewConfiguration.touchSlop * 2) {
-                                moved = true
-                            }
-                            if (!ch.pressed) break
-                        }
-                        if (moved) return@awaitEachGesture
-                        val wait = 260L - (SystemClock.uptimeMillis() - t0)
-                        if (wait > 0) {
-                            val second = withTimeoutOrNullCompat(wait) {
-                                val d2 = awaitFirstDown()
-                                d2
-                            }
-                            if (second != null) {
-                                val third = size.width / 3f
-                                when {
-                                    second.position.x < third -> latestSeekBy.value(-10_000)
-                                    second.position.x > third * 2 -> latestSeekBy.value(10_000)
-                                    else -> latestController.value?.let {
-                                        if (it.isPlaying) it.pause() else it.play()
-                                    }
-                                }
-                                return@awaitEachGesture
-                            }
-                        }
-                        showControls = !showControls
-                        if (showControls) hideGen++
                     }
                 }
             )
@@ -562,8 +540,8 @@ private fun SideMeters(hint: SideHint?) {
         exit = fadeOut(tween(160)),
         modifier = Modifier.fillMaxSize()
     ) {
-        val h = hint ?: return@AnimatedVisibility
-        when (h) {
+        when (val h = hint) {
+            null -> Unit
             is SideHint.Brightness -> Meter(true, h.v, Icons.Default.BrightnessHigh, Alignment.CenterStart)
             is SideHint.Volume -> Meter(false, h.v, Icons.Default.VolumeUp, Alignment.CenterEnd)
             is SideHint.Seek -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -581,7 +559,7 @@ private fun SideMeters(hint: SideHint?) {
 }
 
 @Composable
-private fun Meter(left: Boolean, value: Float, icon: androidx.compose.ui.graphics.vector.ImageVector, align: Alignment) {
+private fun Meter(left: Boolean, value: Float, icon: ImageVector, align: Alignment) {
     Box(Modifier.fillMaxSize(), contentAlignment = align) {
         Column(
             Modifier.padding(horizontal = 22.dp)
@@ -679,7 +657,7 @@ private fun CenterTransport(
             Modifier.size(68.dp).clip(CircleShape).background(Color.White),
             contentAlignment = Alignment.Center
         ) {
-            androidx.compose.material3.IconButton(onPlay, modifier = Modifier.fillMaxSize()) {
+            IconButton(onPlay, modifier = Modifier.fillMaxSize()) {
                 Icon(
                     if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
                     "تشغيل",
@@ -706,9 +684,9 @@ private fun SeekSection(
     Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp)) {
         var local by remember { mutableFloatStateOf(frac) }
         var down by remember { mutableStateOf(false) }
-        if (!down) local = frac
+        LaunchedEffect(frac, down) { if (!down) local = frac }
         val shown = if (down) local else frac
-        val thumb = animateFloatAsState(if (down) 1f else 0f, label = "thumb")
+        val thumb by animateFloatAsState(if (down) 1f else 0f, label = "thumb")
         Canvas(
             Modifier
                 .fillMaxWidth()
@@ -737,25 +715,10 @@ private fun SeekSection(
         ) {
             val y = size.height / 2
             val track = 3.dp.toPx()
-            val t = 7.dp.toPx() + thumb.value * 4.dp.toPx()
-            drawRoundRect(
-                Color.White.copy(0.22f),
-                Offset(0f, y - track / 2),
-                Size(size.width, track),
-                CornerRadius(track)
-            )
-            drawRoundRect(
-                Color.White.copy(0.35f),
-                Offset(0f, y - track / 2),
-                Size(size.width * buf, track),
-                CornerRadius(track)
-            )
-            drawRoundRect(
-                Gold,
-                Offset(0f, y - track / 2),
-                Size(size.width * shown, track),
-                CornerRadius(track)
-            )
+            val t = 7.dp.toPx() + thumb * 4.dp.toPx()
+            drawRoundRect(Color.White.copy(0.22f), Offset(0f, y - track / 2), Size(size.width, track), CornerRadius(track))
+            drawRoundRect(Color.White.copy(0.35f), Offset(0f, y - track / 2), Size(size.width * buf, track), CornerRadius(track))
+            drawRoundRect(Gold, Offset(0f, y - track / 2), Size(size.width * shown, track), CornerRadius(track))
             drawCircle(Gold, t, Offset(size.width * shown, y), style = Fill)
             drawCircle(Color.White, t * 0.35f, Offset(size.width * shown, y))
         }
@@ -768,21 +731,18 @@ private fun SeekSection(
 
 @Composable
 private fun GlassIcon(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     desc: String,
     modifier: Modifier = Modifier,
-    size: androidx.compose.ui.unit.Dp = 40.dp,
-    iconSize: androidx.compose.ui.unit.Dp = 20.dp,
+    size: Dp = 40.dp,
+    iconSize: Dp = 20.dp,
     onClick: () -> Unit
 ) {
     Box(
-        modifier
-            .size(size)
-            .clip(CircleShape)
-            .background(Color.White.copy(0.10f)),
+        modifier.size(size).clip(CircleShape).background(Color.White.copy(0.10f)),
         contentAlignment = Alignment.Center
     ) {
-        androidx.compose.material3.IconButton(onClick, modifier = Modifier.fillMaxSize()) {
+        IconButton(onClick, modifier = Modifier.fillMaxSize()) {
             Icon(icon, desc, tint = Color.White, modifier = Modifier.size(iconSize))
         }
     }
@@ -794,7 +754,7 @@ private fun GlassChip(text: String, onClick: () -> Unit) {
         Modifier.height(40.dp).clip(RoundedCornerShape(20.dp)).background(Color.White.copy(0.10f)),
         contentAlignment = Alignment.Center
     ) {
-        androidx.compose.material3.TextButton(onClick) {
+        TextButton(onClick) {
             Text(text, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         }
     }
@@ -837,5 +797,3 @@ private fun setBrightness(ctx: Context, value: Float) {
     lp.screenBrightness = value
     act.window.attributes = lp
 }
-
-
